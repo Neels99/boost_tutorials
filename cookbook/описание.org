@@ -1,0 +1,1020 @@
+* Boost.Asio C++ Network Programming Cookbook by Dmytro Radchuk
+** Stuff
+Uses spdlog (https://github.com/gabime/spdlog) (sudo apt-get install libspdlog-dev)
+
+#+BEGIN_SRC
+// Runtime log levels
+spd::set_level(spd::level::info); //Set global log level to info
+console->debug("This message shold not be displayed!");
+console->set_level(spd::level::debug); // Set specific logger's log level
+console->debug("This message shold be displayed..");
+
+// Compile time log levels
+// define SPDLOG_DEBUG_ON or SPDLOG_TRACE_ON
+SPDLOG_TRACE(console, "Enabled only #ifdef SPDLOG_TRACE_ON..{} ,{}", 1, 3.23);
+SPDLOG_DEBUG(console, "Enabled only #ifdef SPDLOG_DEBUG_ON.. {} ,{}", 1, 3.23);
+
+// Console logger with color
+auto console = spd::stdout_color_mt("console");
+console->info("Welcome to spdlog!");
+console->error("Some error message with arg{}..", 1);
+
+// Formatting examples
+console->warn("Easy padding in numbers like {:08d}", 12);
+console->critical("Support for int: {0:d};  hex: {0:x};  oct: {0:o}; bin: {0:b}", 42);
+console->info("Support for floats {:03.2f}", 1.23456);
+console->info("Positional args are {1} {0}..", "too", "supported");
+console->info("{:<30}", "left aligned");
+
+
+spd::get("console")->info("loggers can be retrieved from a global registry using the spdlog::get(logger_name) function");
+#+END_SRC
+
+** Chapter 01 - The Basics
+*** TCP Protocol
+The ~TCP~ protocol is a transport layer protocol with the following characteristics:
+- It's reliable, which means that this protocol guarantees delivery of the messages in proper
+  order or a notification that the message has not been delivered. The protocol includes error
+  handling mechanisms, which frees the developer from the need to implement them in the
+  application.
+- It assumes logical connection establishment. Before one application can communicate with another
+  over the ~TCP~ protocol, it must establish a logical connection by exchanging service messages
+  according to the standard.
+- It assumes the point-to-point communication model. That is, only two applications can
+  communicate over a single connection. No multicast messaging is supported.
+- It is stream-oriented. This means that the data being sent by one application to another is
+  interpreted by the protocol as a stream of bytes. In practice, it means that if a sender
+  application sends a particular block of data, there is no guarantee that it will be delivered to
+  the receiver application as the same block of data in a single turn, that is, the sent message
+  may be broken into as many parts as the protocol wants and each of them will be delivered
+  separately, though in correct order.
+
+*** UDP Protocol
+The ~UDP~ protocol is a transport layer protocol having different (in some sense opposite)
+characteristics from those of the ~TCP~ protocol. The following are its characteristics:
+- It's unreliable, which means that if a sender sends a message over a ~UDP~ protocol, there is no
+  guarantee that the message will be delivered. The protocol won't try to detect or fix any errors.
+  The developer is responsible for all error handling.
+- It's connectionless, meaning that no connection establishment is needed before the applications
+  can communicate.
+- It supports both one-to-one and one-to-many communication models. Multicast messages are supported
+  by the protocol.
+- It's datagram oriented. This means that the protocol interprets data as messages of a particular
+  size and will try to deliver them as a whole. The message (datagram) either will be delivered as a
+  whole, or if the protocol fails to do that won't be delivered at all.
+
+*** Creating an endpoint
+A typical client application, before it can communicate with a server application to consume its
+services, must obtain the ~IP~ address of the host on which the server application is running and
+the protocol port number associated with it. A pair of values consisting of an ~IP~ address and a
+protocol port number that uniquely identifies a particular application running on a particular host
+in a computer network is called an endpoint.
+
+The ~IP~ address can be represented as a string containing an address in dot-decimal notation if it
+is an ~IPv4~ address (for example, =192.168.10.112=) or in hexadecimal notation if it is an ~IPv6~
+address (for example, =FE36::0404:C3FA:EF1E:3829=). Besides, the server ~IP~ address can be provided
+to the client application in an indirect form, as a string containing a ~DNS~ name (for example,
+=localhost= or =www.google.com=). Another way to represent an ~IP~ address is an integer value. The
+~IPv4~ address is represented as a 32-bit integer and ~IPv6~ as a 64-bit integer. However, due to
+poor readability and memorability this representation is used extremely rarely.
+
+If the client application is provided with a ~DNS~ name before it can communicate with the server
+application, it must resolve the ~DNS~ name to obtain the actual IP address of the host running the
+server application. Sometimes, the ~DNS~ name may map to multiple ~IP~ addresses, in which case the
+client may want to try addresses one by one until it finds the one that works.
+
+The server application needs to deal with endpoints too. It uses the endpoint to specify to the
+operating system on which the ~IP~ address and protocol port it wants to listen for incoming
+messages from the clients. If the host running the server application has only one network interface
+and a single ~IP~ address assigned to it, the server application has only one option as to on which
+address to listen. However, sometimes the host might have more than one network interface and
+correspondingly more than one ~IP~ address. In this situation, the server application encounters a
+difficult problem of selecting an appropriate ~IP~ address on which to listen for incoming messages.
+The problem is that the application knows nothing about details such as underlying ~IP~ protocol
+settings, packet routing rules, ~DNS~ names which are mapped to the corresponding ~IP~ addresses,
+and so on. Therefore, it is quite a complex task (and sometimes even not solvable) for the server
+application to foresee through which ~IP~ address the messages sent by clients will be delivered to
+the host.
+
+If the server application chooses only one ~IP~ address to listen for incoming messages, it may miss
+messages routed to other ~IP~ addresses of the host. Therefore, the server application usually wants
+to listen on all ~IP~ addresses available on the host. This guarantees that the server application
+will receive all messages arriving at any ~IP~ address and the particular protocol port.
+
+**** Creating an endpoint in the client to designate the server
+The following algorithm describes steps required to perform in the client application to create an
+endpoint designating a server application the client wants to communicate with. Initially, the IP
+address is represented as a string in the dot-decimal notation if this is an IPv4 address or in
+hexadecimal notation if this is an IPv6 address:
+1. Obtain the server application's IP address and port number. The IP address should be specified as
+   a string in the dot-decimal (IPv4) or hexadecimal (IPv6) notation.
+2. Represent the raw IP address as an object of the ~asio::ip::address~ class.
+3. Instantiate the object of the ~asio::ip::tcp::endpoint~ or ~asio::ip::udp::endpoint~ class from
+   the address object created in step 2 and a port number.
+4. The endpoint is ready to be used to designate the server application in Boost.Asio communication
+   related methods.
+
+**** Creating the server endpoint
+The following algorithm describes steps required to perform in a server application to create an
+endpoint specifying all IP addresses available on the host and a port number on which the server
+application wants to listen for incoming messages from the clients:
+1. Obtain the protocol port number on which the server will listen for incoming requests.
+2. Create a special instance of the ~asio::ip::address~ object representing all IP addresses
+   available on the host running the server.
+3. Instantiate an object of the ~asio::ip::tcp::endpoint~ or ~asio::ip::udp::endpoint~ class from
+   the address object created in step 2 and a port number.
+4. The endpoint is ready to be used to specify to the operating system that the server wants to
+   listen for incoming messages on all IP addresses and a particular protocol port number.
+
+*** Creating a socket
+The TCP/IP standard tells us nothing about sockets. Moreover, it tells us almost nothing about how
+to implement the ~TCP~ or ~UDP~ protocol software ~API~ through which this software functionality
+can be consumed by the application.
+
+Berkeley Sockets ~API~ is the most popular ~TCP~ and ~UDP~ protocols' ~API~. It is designed around
+the concept of a socket - an abstract object representing a communication session context. Before we
+can perform any network I/O operations, we must first allocate a socket object and then associate
+each I/O operation with it.
+
+Boost.Asio borrows many concepts from Berkeley Sockets ~API~ and is so much similar to it that we
+can call it "an object oriented Berkeley Sockets ~API~". The Boost.Asio library includes a class
+representing a socket concept, which provides interface methods similar to those found in Berkeley
+Sockets ~API~.
+
+Basically, there are two types of sockets. A socket intended to be used to send and receive data to
+and from a remote application or to initiate a connection establishment process with it is called an
+~active~ socket, whereas a ~passive~ socket is the one used to passively wait for incoming
+connection requests from remote applications. Passive sockets don't take part in user data
+transmission.
+
+A ~passive~ socket or ~acceptor~ socket is a type of socket that is used to wait for connection
+establishment requests from remote applications that communicate over the ~TCP~ protocol. This
+definition has two important implications:
+- Passive sockets are used only in server applications or hybrid applications that may play both
+  roles of the client and server.
+- Passive sockets are defined only for the ~TCP~ protocol. As the ~UDP~ protocol doesn't imply
+  connection establishment, there is no need for a passive socket when communication is performed
+  over ~UDP~.
+
+**** Creating an active socket
+The following algorithm describes the steps required to perform in a client application to create
+and open an active socket:
+1. Create an instance of the ~asio::io_service~ class or use the one that has been created earlier.
+2. Create an object of the class that represents the transport layer protocol (~TCP~ or ~UDP~) and
+   the version of the underlying ~IP~ protocol (~IPv4~ or ~IPv6~) over which the socket is intended
+   to communicate.
+3. Create an object representing a socket corresponding to the required protocol type. Pass the
+   object of ~asio::io_service~ class to the socket's constructor.
+4. Call the socket's ~open()~ method, passing the object representing the protocol created in step 2
+   as an argument.
+
+**** Creating a passive socket
+In Boost.Asio a ~passive~ socket is represented by the ~asio::ip::tcp::acceptor~ class. The name of
+the class suggests the key function of the objects of the class - to listen for and accept or handle
+incoming connection requests.
+
+The following algorithm describes the steps required to perform to create an ~acceptor~ socket:
+1. Create an instance of the ~asio::io_service~ class or use the one that has been created earlier.
+2. Create an object of the ~asio::ip::tcp~ class that represents the ~TCP~ protocol and the required
+   version of the underlying ~IP~ protocol (~IPv4~ or ~IPv6~).
+3. Create an object of the ~asio::ip::tcp::acceptor~ class representing an ~acceptor~ socket,
+   passing the object of the ~asio::io_service~ class to its constructor.
+4. Call the ~acceptor~ socket's ~open()~ method, passing the object representing the protocol
+   created in step 2 as an argument.
+
+*** Resolving a DNS name
+To enable labeling the devices in a network with human-friendly names, the ~Domain Name System
+(DNS)~ was introduced. In short, ~DNS~ is a distributed naming system that allows associating
+human-friendly names with devices in a computer network. A ~DNS~ name or a domain name is a string
+that represents a name of a device in the computer network.
+
+To be precise, a ~DNS~ name is an alias for one or more ~IP~ addresses but not the devices. It
+doesn't name a particular physical device but an ~IP~ address that can be assigned to a device.
+Thus, ~DNS~ introduces a level of indirection in addressing a particular server application in the
+network.
+
+~DNS~ acts as a distributed database storing mappings of ~DNS~ names to corresponding ~IP~ addresses
+and providing an interface, allowing querying the ~IP~ addresses to which a particular ~DNS~ name is
+mapped. The process of transforming a ~DNS~ name into corresponding ~IP~ addresses is called a =DNS
+name resolution=. Modern network operating systems contain functionality that can query ~DNS~ to
+resolve ~DNS` names and provides the interface that can be used by applications to perform ~DNS~
+name resolution.
+
+When given a ~DNS~ name, before a client can communicate with a corresponding server application, it
+must first resolve the name to obtain ~IP~ addresses associated with that name.
+
+The following algorithm describes steps required to perform in a client application in order to
+resolve a ~DNS~ name to obtain ~IP~ addresses (zero or more) of hosts (zero or more) running the
+server application that the client application wants to communicate with:
+1. Obtain the ~DNS~ name and the protocol port number designating the server application and
+   represent them as strings.
+2. Create an instance of the ~asio::io_service~ class or use the one that has been created earlier.
+3. Create an object of the ~resolver::query~ class representing a ~DNS~ name resolution query.
+4. Create an instance of ~DNS~ name ~resolver~ class suitable for the necessary protocol.
+5. Call the resolver's ~resolve()~ method, passing a query object created in step 3 to it as an
+   argument.
+
+*** Binding a socket to an endpoint
+Before an active socket can communicate with a remote application or a passive socket can accept
+incoming connection requests, they must be associated with a particular local ~IP~ address (or
+multiple addresses) and a protocol port number, that is, an ~endpoint~. The process of associating a
+socket with a particular endpoint is called =binding=. When a socket is bound to an endpoint, all
+network packets coming into the host from the network with that endpoint as their target address
+will be redirected to that particular socket by the operating system. Likewise, all the data coming
+out from a socket bound to a particular endpoint will be output from the host to the network through
+a network interface associated with the corresponding ~IP~ address specified in that endpoint.
+
+~UDP~ servers don't establish connections and use ~active~ sockets to wait for incoming requests.
+The process of binding an ~active~ socket is very similar to binding an ~acceptor~ socket.
+
+The following algorithm describes steps required to create an ~acceptor~ socket and to bind it to an
+endpoint designating all ~IP~ addresses available on the host and a particular protocol port number
+in the ~IPv4~ ~TCP~ server application:
+1. Obtain the protocol port number on which the server should listen for incoming connection
+   requests.
+2. Create an endpoint that represents all ~IP~ addresses available on the host and the protocol port
+   number obtained in the step 1.
+3. Create and open an ~acceptor~ socket.
+4. Call the ~acceptor~ socket's ~bind()~ method, passing the endpoint object as an argument to it.
+
+*** Connecting a socket
+**** IP Address / Port Number Connection
+Before a TCP socket can be used to communicate with a remote application, it must
+establish a logical connection with it. According to the TCP protocol, the connection
+establishment process lies in exchanging of service messages between two applications,
+which, if succeeds, results in two applications being logically connected and ready for
+communication with each other.
+
+Roughly, the connection establishment process looks like this. The client application, when it wants
+to communicate with the server application, creates and opens an ~active~ socket and issues a
+~connect()~ command on it, specifying a target server application with an ~endpoint~ object. This
+leads to a connection establishment request message being sent to the server application over the
+network. The server application receives the request and creates an ~active~ socket on its side,
+marking it as connected to a specific client and replies back to the client with the message
+acknowledging that connection is successfully set up on the server side. Next, the client having
+received the acknowledgment from the server, marks its socket as connected to the server, and sends
+one more message to it acknowledging that the connection is successfully set up on the client side.
+When the server receives the acknowledgment message from the client, the logical connection between
+two applications is considered established.
+
+The point-to-point communication model is assumed between two connected sockets. This means that if
+socket A is connected to socket B, both can only communicate with each other and cannot communicate
+with any other socket C. Before socket A can communicate with socket C, it must close the connection
+with socket B and establish a new connection with socket C.
+
+The following algorithm descries steps required to perform in the ~TCP~ client application to
+synchronously connect an ~active~ socket to the server application:
+1. Obtain the target server application's ~IP~ address and a protocol port number.
+2. Create an object of the ~asio::ip::tcp::endpoint~ class from the ~IP~ address and the protocol
+   port number obtained in step 1.
+3. Create and open an ~active~ socket.
+4. Call the socket's ~connect()~ method specifying the endpoint object created in step 2 as an
+   argument.
+5. If the method succeeds, the socket is considered connected and can be used to send and receive
+   data to and from the server.
+
+**** DNS Name / Port Number Connection
+The previous recipe showed how to connect a socket to a specific server application designated by an
+endpoint when an ~IP~ address and a protocol port number are provided to the client application
+explicitly. However, sometimes the client application is provided with a ~DNS~ name that may be
+mapped to one or more ~IP~ addresses. In this case, we first need to resolve the ~DNS~ name using
+the ~resolve()~ method provided by the ~asio::ip::tcp::resolver~ class. This method resolves a ~DNS~
+name, creates an object of the ~asio::ip::tcp::endpoint~ class from each ~IP~ address resulted from
+resolution, puts all endpoint objects in a collection, and returns an object of the
+~asio::ip::tcp::resolver::iterator~ class, which is an iterator pointing to the first element in the
+collection.
+
+When a ~DNS~ name resolves to multiple ~IP~ addresses, the client application - when deciding to
+which one to connect - usually has no reasons to prefer one ~IP~ address to any other. The common
+approach in this situation is to iterate through endpoints in the collection and try to connect to
+each of them one by one until the connection succeeds. Boost.Asio provides auxiliary functionality
+that implements this approach.
+
+The free function ~asio::connect()~ accepts an ~active~ socket object and an object of the
+~asio::ip::tcp::resolver::iterator~ class as input arguments, iterates over a collection of
+endpoints, and tries to connect the socket to each endpoint. The function stops iteration, and
+returns when it either successfully connects a socket to one of the endpoints or when it has tried
+all the endpoints and failed to connect the socket to all of them.
+
+The following algorithm demonstrates steps required to connect a socket to a server application
+represented by a ~DNS~ name and a protocol port number:
+1. Obtain the ~DNS~ name of a host running the server application and the server's port number and
+   represent them as strings.
+2. Resolve a ~DNS~ name using the ~asio::ip::tcp::resolver~ class.
+3. Create an ~active~ socket without opening it.
+4. Call the ~asio::connect()~ function passing a socket object and an iterator object obtained in
+   step 2 to it as arguments.
+
+*** Accepting Connections
+When the client application wants to communicate to the server application over a ~TCP~ protocol, it
+first needs to establish a logical connection with that server. In order to do that, the client
+allocates an ~active~ socket and issues a ~connect~ command on it (for example by calling the
+~connect()~ method on the socket object), which leads to a connection establishment request message
+being sent to the server.
+
+On the server side, some arrangements must be performed before the server application can accept and
+handle the connection requests arriving from the clients. Before that, all connection requests
+targeted at this server application are rejected by the operating system.
+
+First, the server application creates and opens an ~acceptor~ socket and binds it to the particular
+~endpoint~. At this point, the client's connection requests arriving at the ~acceptor~ socket's
+~endpoint~ are still rejected by the operating system. For the operating system to start accepting
+connection requests targeted at particular ~endpoint~ associated with particular ~acceptor~ socket,
+that ~acceptor~ socket must be switched into listening mode. After that, the operating system
+allocates a ~queue~ for pending connection requests associated with this ~acceptor~ socket and starts
+accepting connection request addressed to it.
+
+When a new connection request arrives, it is initially received by the operating system, which puts
+it to the pending connection requests ~queue~ associated with an ~acceptor~ socket being the
+connection request's target. When in the ~queue~, the connection request is available to the server
+application for processing. The server application, when ready to process the next connection
+request, de-queues one and processes it.
+
+Note that the ~acceptor~ socket is only used to establish connections with client applications and
+is not used in the further communication process. When processing a pending connection request, the
+~acceptor~ socket allocates a new ~active~ socket, binds it to an ~endpoint~ chosen by the operating
+system, and connects it to the corresponding client application that has issued that connection
+request. Then, this new ~active~ socket is ready to be used for communication with the client. The
+~acceptor~ socket becomes available to process the next pending connection request.
+
+Note that ~UDP~ servers don't use ~acceptor~ sockets because the ~UDP~ protocol doesn't imply
+connection establishment. Instead, an ~active~ socket is used that is bound to an ~endpoint~ and
+listens for incoming I/O messages, and this same ~active~ socket is used for communication.
+
+The following algorithm describes how to set up an ~acceptor~ socket so that it starts listening for
+incoming connections and then how to use it to synchronously process the pending connection request.
+The algorithm assumes that only one incoming connection will be processed in synchronous mode:
+1. Obtain the port number on which the server will receive incoming connection requests.
+2. Create a server ~endpoint~.
+3. Instantiate and open an ~acceptor~ socket.
+4. Bind the ~acceptor~ socket to the server ~endpoint~ created in step 2.
+5. Call the ~acceptor~ socket's ~listen()~ method to make it start listening for incoming connection
+   requests on the ~endpoint~.
+6. Instantiate an ~active~ socket object.
+7. When ready to process a connection request, call the ~acceptor~ socket's ~accept()~ method
+   passing an ~active~ socket object created in step 6 as an argument.
+8. If the call succeeds, the ~active~ socket is connected to the client application and is ready to
+   be used for communication with it.
+
+** Chapter 02 - I/O Operations
+I/O operations are the key operations in the networking infrastructure of any distributed
+application. They are directly involved in the process of data exchange. Input operations are used
+to receive data from remote applications, whereas output operations allow sending data to them.
+
+*** Using fixed length I/O buffers
+Fixed length I/O buffers are usually used with I/O operations and play the role of either a data
+source or destination when the size of the message to be sent or received is known. For example,
+this can be a constant array of chars allocated on a stack, which contain a string that represents
+the request to be sent to the server. Or, this can be a writable buffer allocated in the free
+memory, which is used as a data destination point, when reading data from a socket.
+
+In Boost.Asio, a fixed length buffer is represented by one of the two classes:
+~asio::mutable_buffer~ or ~asio::const_buffer~. Both these classes represent a contiguous block of
+memory that is specified by the address of the first byte of the block and its size in bytes. As the
+names of these classes suggest, ~asio::mutable_buffer~ represents a writable buffer, whereas
+~asio::const_buffer~ represents a read-only one.
+
+However, neither the ~asio::mutable_buffer~ nor ~asio::const_buffer~ classes are used in Boost.Asio
+I/O functions and methods directly. Instead, the ~MutableBufferSequence~ and ~ConstBufferSequence~
+concepts are introduced.
+
+The ~asio::mutable_buffers_1~ and ~asio::const_buffers_1~ classes are adapters of the
+~asio::mutable_buffer~ and ~asio::const_buffer~ classes, respectively. They provide an interface and
+behavior that satisfy the requirements of the ~MutableBufferSequence~ and ~ConstBufferSequence~
+concepts, which allows us to pass these adapters as arguments to Boost.Asio I/O functions and
+methods.
+
+It's important to note that neither the classes that represent the buffers nor the adaptor classes
+provided by Boost.Asio that we've considered (namely, ~asio::mutable_buffer~, ~asio::const_buffer~,
+~asio::mutable_buffers_1~, and ~asio::const_buffers_1~) take ownership of the underlying raw buffer.
+These classes only provide the interface to the buffer and don't control its lifetime.
+
+**** Preparing a buffer for an output operation
+The following algorithm and corresponding code sample describes how to prepare a buffer that can be
+used with the Boost.Asio socket's method that performs an output operation such as
+~asio::ip::tcp::socket::send()~ or the ~asio::write()~ free function:
+1. Allocate a buffer. Note that this step does not involve any functionality or data types from
+   Boost.Asio.
+2. Fill the buffer with the data that is to be used as the output.
+3. Represent the buffer as an object that satisfies the ~ConstBufferSequence~ concept's
+   requirements.
+4. The buffer is ready to be used with Boost.Asio output methods and functions.
+
+**** Preparing a buffer for an input operation
+The following algorithm and corresponding code sample describes how to prepare the buffer that can
+be used with the Boost.Asios socket's method that performs an input operation such as
+~asio::ip::tcp::socket::receive()~ or the ~asio::read()~ free function:
+1. Allocate a buffer. The size of the buffer must be big enough to fit the block of data to be
+   received. Note that this step does not involve any functionality or data types from Boost.Asio.
+2. Represent the buffer using an object that satisfies the ~MutableBufferSequence~ concept's
+   requirements.
+3. The buffer is ready to be used with Boost.Asio input methods and functions.
+
+*** Using extensible stream-oriented I/O buffers
+Extensible buffers are those buffers that dynamically increase their size when new data is written
+to them. They are usually used to read data from sockets when the size of the incoming message is
+unknown.
+
+Some application layer protocols do not define the exact size of the message. Instead, the boundary
+of the message is represented by a specific sequence of symbols at the end of the message itself or
+by a transport protocol service message end of file (~EOF~) issued by the sender after it finishes
+sending the message.
+
+For example, according to the ~HTTP~ protocol, the header section of the request and response
+messages don't have a fixed length and its boundary is represented by a sequence of four ~ASCII~
+symbols, ~<CR><LF><CR><LF>~, which is part of the message. In such cases, dynamically extensible
+buffers and functions that can work with them, which are provided by the Boost.Asio library, are
+very useful.
+
+Extensible stream-oriented buffers are represented in Boost.Asio with the ~asio::streambuf~ class,
+which is a ~typedef~ for ~asio::basic_streambuf~: ~typedef basic_streambuf<> streambuf;~ The
+~asio::basic_streambuf<>~ class is inherited from ~std::streambuf~, which means that it can be used
+as a stream buffer for STL stream classes. In addition to this, several I/O functions provided by
+Boost.Asio deal with buffers that are represented as objects of this class.
+
+We can work with an object of the ~asio::streambuf~ class just like we would work with any stream
+buffer class that is inherited from the ~std::streambuf~ class. For example, we can assign this
+object to a stream (for example, ~std::istream~, ~std::ostream~, or ~std::iostream~, depending on
+our needs), and then, use stream's ~operator<<()~ and ~operator>>()~ operators to write and read
+data to and from the stream.
+
+*** Writing to a TCP socket synchronously
+Writing to a ~TCP~ socket is an output operation that is used to send data to the remote application
+connected to this socket. Synchronous writing is the simplest way to send the data using a socket
+provided by Boost.Asio. The methods and functions that perform synchronous writing to the socket
+block the thread of execution and do not return until the data (at least some amount of data) is
+written to the socket or an error occurs.
+
+The most basic way to write to the socket provided by the Boost.Asio library is to use the
+~write_some()~ method of the ~asio::ip::tcp::socket~ class. This method accepts an object that
+represents a composite buffer as an argument, and as its name suggests, writes some amount of data
+from the buffer to the socket. If the method succeeds, the return value indicates the number of
+bytes written. The point to emphasize here is that the method may not send all the data provided to
+it through the buffers argument. The method only guarantees that at least one byte will be written
+if an error does not occur. This means that, in a general case, in order to write all the data from
+the buffer to the socket, we may need to call this method several times.
+
+The following algorithm describes the steps required to synchronously write data to a ~TCP~ socket
+in a distributed application:
+1. In a client application, allocate, open, and connect an active ~TCP~ socket. In a server
+   application, obtain a connected active ~TCP~ socket by accepting a connection request using an
+   ~acceptor~ socket.
+2. Allocate the buffer and fill it with data that is to be written to the socket.
+3. In a loop, call the socket's ~write_some()~ method as many times as it is needed to send all the
+   data available in the buffer.
+
+**** Alternative – the send() method
+The ~asio::ip::tcp::socket~ class contains another method to synchronously write data to the socket
+named ~send()~. There are three overloads of this method. One of them is equivalent to the
+~write_some()~ method, as described earlier. It has exactly the same signature and provides exactly
+the same functionality. These methods are synonyms in a sense.
+
+**** Alternative - the asio::write() free function
+Writing to a socket using the socket's ~write_some()~ method seems very complex for such a simple
+operation. Even if we want to send a small message that consists of several bytes, we must use a
+loop, a variable to keep track of how many bytes have already been written, and properly construct a
+buffer for each iteration of the loop. This approach is error-prone and makes the code more
+difficult to understand. Fortunately, Boost.Asio provides a free function, which simplifies writing
+to a socket. This function is called ~asio::write()~.
+
+This function accepts two arguments. The first of them is a reference to an object that satisfies
+the requirements of the ~SyncWriteStream~ concept. The object of the ~asio::ip::tcp::socket~ class
+that represents a ~TCP~ socket satisfies these requirements and, therefore, can be used as the first
+argument of the function. The second argument represents the buffer (simple or composite) and
+contains data that is to be written to the socket.
+
+In contrast to the socket object's ~write_some()~ method, which writes some amount of data from the
+buffer to the socket, the ~asio::write()~ function writes all the data available in the buffer. This
+simplifies writing to the socket and makes the code shorter and cleaner.
+
+*** Reading from a TCP socket synchronously
+Reading from a ~TCP~ socket is an input operation that is used to receive data sent by the remote
+application connected to this socket. Synchronous reading is the simplest way to receive the data
+using a socket provided by Boost.Asio. The methods and functions that perform synchronous reading
+from the socket blocks the thread of execution and doesn't return until the data (at least some
+amount of data) is read from the socket or an error occurs.
+
+The most basic way to read data from the socket provided by the Boost.Asio library is the
+~read_some()~ method of the ~asio::ip::tcp::socket~ class. This method accepts an object that
+represents a writable buffer (single or composite) as an argument, and as its name suggests, reads
+some amount of data from the socket to the buffer. If the method succeeds, the return value
+indicates the number of bytes read. It's important to note that there is no way to control how many
+bytes the method will read. The method only guarantees that at least one byte will be read if an
+error does not occur. This means that, in a general case, in order to read a certain amount of data
+from the socket, we may need to call the method several times.
+
+The following algorithm describes the steps required to synchronously read data from a ~TCP~ socket
+in a distributed application:
+1. In a client application, allocate, open, and connect an active ~TCP~ socket. In a server
+   application, obtain a connected active ~TCP~ socket by accepting a connection request using an
+   ~acceptor~ socket.
+2. Allocate the buffer of a sufficient size to fit in the expected message to be read.
+3. In a loop, call the socket's ~read_some()~ method as many times as it is needed to read the
+   message.
+
+**** Alternative - the receive() method
+The ~asio::ip::tcp::socket~ class contains another method to read data from the socket synchronously
+called ~receive()~. There are three overloads of this method. One of them is equivalent to the
+~read_some()~ method, as described earlier. It has exactly the same signature and provides exactly
+the same functionality. These methods are synonyms in a sense.
+
+**** Alternative Asio free functions
+Reading from a socket using the socket's ~read_some()~ method seems very complex for such a simple
+operation. This approach requires us to use a loop, a variable to keep track of how many bytes have
+already been read, and properly construct a buffer for each iteration of the loop. This approach is
+error-prone and makes the code more difficult to understand and maintain.
+
+Fortunately, Boost.Asio provides a family of free functions that simplify synchronous reading
+of data from a socket in different contexts. There are three such functions, each having
+several overloads, that provide a rich functionality that facilitates reading data from a socket.
+
+***** The asio::read() function
+The ~asio::read()~ function is the simplest one out of the three. This function accepts two
+arguments. The first of them is a reference to an object that satisfies the requirements of the
+~SyncReadStream~ concept. The object of the ~asio::ip::tcp::socket~ class that represents a ~TCP~
+socket satisfies these requirements and, therefore, can be used as the first argument of the
+function. The second argument represents a buffer (simple or composite) to which the data will be
+read from the socket.
+
+In contrast to the socket's ~read_some()~ method, which reads some amount of data from the socket to
+the buffer, the ~asio::read()~ function, during a single call, reads data from the socket until the
+buffer passed to it as an argument is filled or an error occurs. This simplifies reading from the
+socket and makes the code shorter and cleaner.
+
+***** The asio::read_until() function
+The ~asio::read_until()~ function provides a way to read data from a socket until a specified
+pattern is encountered in the data. There are eight overloads of this function.
+
+This function accepts three arguments. The first of them is a reference to an object that satisfies
+the requirements of the ~SyncReadStream~ concept. The object of the ~asio::ip::tcp::socket~ class
+that represents a ~TCP~ socket satisfies these requirements and, therefore, can be used as the first
+argument of the function. The second argument represents a stream-oriented extensible buffer in
+which the data will be read. The last argument specifies a delimiter character.
+
+The ~asio::read_until()~ function will read data from the socket to the buffer until it encounters a
+character specified by the delimiter argument in the read portion of the data. When the specified
+character is encountered, the function returns.
+
+It's important to note that the ~asio::read_until()~ function is implemented so that it reads the
+data from the socket by blocks of variable sizes (internally it uses the socket's ~read_some()~
+method to read the data). When the function returns, the buffer may contain some symbols after the
+delimiter symbol. This may happen if the remote application sends some more data after the delimiter
+symbol (for example, it may send two messages in a row, each having a delimiter symbol in the end).
+In other words, when the ~asio::read_until()~ function returns successfully, it is guaranteed that
+the buffer contains at least one delimiter symbol but may contain more. It is the developer's
+responsibility to parse the data in the buffer and handle the situation when it contains data after
+the delimiter symbol.
+
+***** The asio::read_at() function
+The ~asio::read_at()~ function provides a way to read data from a socket, starting at a particular
+offset. Because this function is rarely used, it is beyond the scope of this book. Refer to the
+corresponding Boost.Asio documentation section for more details about this function and its
+overloads.
+
+*** Writing to a TCP socket asynchronously
+Asynchronous writing is a flexible and efficient way to send data to a remote application.
+
+The most basic tool used to asynchronously write data to the socket provided by the Boost.Asio
+library is the ~async_write_some()~ method of the ~asio::ip::tcp::socket~ class. This method
+initiates the write operation and returns immediately. It accepts an object that represents a buffer
+that contains the data to be written to the socket as its first argument. The second argument is a
+callback, which will be called by Boost.Asio when an initiated operation is completed. This argument
+can be a function pointer, functor, or any other object that satisfies the requirements of the
+~WriteHandler~ concept.
+
+As the ~async_write_some()~ method's name suggests, it initiates an operation that is intended to
+write some amount of data from the buffer to the socket. This method guarantees that at least one
+byte will be written during the corresponding asynchronous operation if an error does not occur.
+This means that, in a general case, in order to write all the data available in the buffer to the
+socket, we may need to perform this asynchronous operation several times.
+
+The following algorithm describes the steps required to perform and implement an application, which
+writes data to a ~TCP~ socket asynchronously. Note that this algorithm provides a possible way to
+implement such an application. Boost.Asio is quite flexible and allows us to organize and structure
+the application by writing data to a socket asynchronously in many different ways:
+1. Define a data structure that contains a pointer to a socket object, a buffer, and a variable used
+   as a counter of bytes written.
+2. Define a callback function that will be called when the asynchronous writing operation is
+   completed.
+3. In a client application, allocate and open an active ~TCP~ socket and connect it to a remote
+   application. In a server application, obtain a connected active ~TCP~ socket by accepting a
+   connection request.
+4. Allocate a buffer and fill it with data that is to be written to the socket.
+5. Initiate an asynchronous writing operation by calling the socket's ~async_write_some()~ method.
+   Specify a function defined in step 2 as a callback.
+6. Call the ~run()~ method on an object of the ~asio::io_service~ class.
+7. In a callback, increase the counter of bytes written. If the number of bytes written is less than
+   the total amount of bytes to be written, initiate a new asynchronous writing operation to write
+   the next portion of the data.
+
+**** Alternative - the asio::async_write() free function
+Although the ~async_write_some()~ method allows asynchronously writing data to the socket, the
+solution based on it is somewhat complex and error-prone. Fortunately, Boost.Asio provides a more
+convenient way to asynchronously write data to a socket using the free function
+~asio::async_write()~.
+
+This function is very similar to the socket's ~async_write_some()~ method. Its first argument is an
+object that satisfies the requirements of the ~AsyncWriteStream~ concept. The object of the
+~asio::ip::tcp::socket~ class satisfies these requirements and, therefore, can be used with this
+function.
+
+The second and the third arguments of the ~asio::async_write()~ function are similar to
+the first and second arguments of the ~async_write_some()~ method of a TCP socket object
+described in the previous sample. These arguments are buffers that contain data that is to
+be written and functions or objects that represent a callback, which will be called when the
+operation is completed.
+
+In contrast to the socket's ~async_write_some()~ method, which initiates the operation that writes
+some amount of data from the buffer to the socket, the ~asio::async_write()~ function initiates the
+operation, which writes all the data available in the buffer. In this case, the callback is called
+only when all the data available in the buffer is written to the socket or when an error occurs.
+This simplifies writing to the socket and makes the code shorter and cleaner.
+
+The ~asio::async_write()~ function is implemented by means of zero or more calls to the socket
+object's ~async_write_some()~ method. This is similar to how the ~writeToSocket()~ function in our
+initial sample is implemented. Note that the ~asio::async_write()~ function has three more
+overloads, providing additional functionalities. Some of them may be very useful in specific
+circumstances.
+
+*** Reading from a TCP socket asyncrhonously
+Asynchronous reading is a flexible and efficient way to receive data from a remote application.
+
+The most basic tool used to asynchronously read data from a ~TCP~ socket provided by the Boost.Asio
+library is the ~async_read_some()~ method of the ~asio::ip::tcp::socket~ class. This method
+initiates an asynchronous read operation and returns immediately. It accepts an object that
+represents a mutable buffer as its first argument to which the data will be read from the socket.
+The second argument is a callback that is called by Boost.Asio when the operation is completed. This
+argument can be a function pointer, a functor, or any other object that satisfies the requirements
+of the ~ReadHandler~ concept.
+
+As the ~async_read_some()~ method's name suggests, it initiates an operation that is intended to
+read some amount of data from the socket to the buffer. This method guarantees that at least one
+byte will be read during the corresponding asynchronous operation if an error does not occur. This
+means that, in a general case, in order to read all the data from the socket, we may need to perform
+this asynchronous operation several times.
+
+The following algorithm describes the steps required to implement an application, which reads data
+from a socket asynchronously. Note that this algorithm provides a possible way to implement such an
+application. Boost.Asio is quite flexible and allows us to organize and structure the application by
+reading data from a socket asynchronously in different ways:
+1. Define a data structure that contains a pointer to a socket object, a buffer, a variable that
+   defines the size of the buffer, and a variable used as a counter of bytes read.
+2. Define a callback function that will be called when an asynchronous reading operation is
+   completed.
+3. In a client application, allocate and open an active ~TCP~ socket, and then, connect it to a
+   remote application. In a server application, obtain a connected active ~TCP~ socket by accepting
+   a connection request.
+4. Allocate a buffer big enough for the expected message to fit in.
+5. Initiate an asynchronous reading operation by calling the socket's ~async_read_some()~ method,
+   specifying a function defined in step 2 as a callback.
+6. Call the ~run()~ method on an object of the ~asio::io_service~ class.
+7. In a callback, increase the counter of bytes read. If the number of bytes read is less than the
+   total amount of bytes to be read (that is, the size of an expected message), initiate a new
+   asynchronous reading operation to read the next portion of data.
+
+**** Alternative - the asio::async_read() free function
+Although the ~async_read_some()~ method, as described in the previous sample, allows asynchronously
+reading data from the socket, the solution based on it is somewhat complex and error-prone.
+Fortunately, Boost.Asio provides a more convenient way to asynchronously read data from a socket:
+the free function ~asio::async_read()~.
+
+This function is very similar to the socket's ~async_read_some()~ method. Its first argument is an
+object that satisfies the requirements of the AsyncReadStream concept. The second and third
+arguments of the ~asio::async_read()~ function are similar to the first and second arguments of the
+~async_read_some()~ method of a TCP socket object described in the previous sample. These arguments
+are buffers used as data destination points and functions or objects that represent a callback,
+which will be called when the operation is completed.
+
+In contrast to the socket's ~async_read_some()~ method, which initiates the operation, that reads
+some amount of data from the socket to the buffer, the ~asio::async_read()~ function initiates the
+operation that reads the data from the socket until the buffer passed to it as an argument is full.
+In this case, the callback is called when the amount of data read is equal to the size of the
+provided buffer or when an error occurs. This simplifies reading from the socket and makes the code
+shorter and cleaner.
+
+The ~asio::async_read()~ function is implemented by means of zero or more calls to the socket
+object's ~async_read_some()~ method. This is similar to how the ~readFromSocket()~ function in our
+initial sample is implemented. Note that the ~asio::async_read()~ function has three more overloads,
+providing additional functionalities. Some of them may be very useful in specific circumstances.
+
+*** Canceling asynchronous operations
+One of the benefits of asynchronous operations provided by the Boost.Asio library is that they can
+be canceled at any moment after the initiation.
+
+The following algorithm provides the steps required to initiate and cancel asynchronous operations
+with Boost.Asio:
+1. If the application is intended to run on Windows XP or Windows Server 2003, define flags that
+   enable asynchronous operation canceling on these versions of Windows.
+2. Allocate and open a ~TCP~ or ~UDP~ socket. It may be an active or passive (acceptor) socket in
+   the client or server application.
+3. Define a callback function or functor for an asynchronous operation. If needed, in this callback,
+   implement a branch of code that handles the situation when the operation has been canceled.
+4. Initiate one or more asynchronous operations and specify a function or an object defined in step
+   4 as a callback.
+5. Spawn an additional thread and use it to run the Boost.Asio event loop.
+6. Call the ~cancel()~ method on the socket object to cancel all the outstanding asynchronous
+   operations associated with this socket.
+
+In addition to this, the ~async_resolve()~ method of the ~asio::ip::tcp::resolver~ or
+~asio::ip::udp::resolver~ class used to asynchronously resolve a ~DNS~ name can be canceled by
+calling the resolver object's ~cancel()~ method.
+
+All asynchronous operations initiated by the corresponding free functions provided by Boost.Asio can
+be canceled as well by calling the ~cancel()~ method on an object that was passed to the free
+function as the first argument. This object can represent either a socket (active or passive) or a
+resolver.
+
+*** Shutting down and closing a socket
+In some distributed applications that communicate over the ~TCP~ protocol, there is a need to
+transfer messages that do not have a fixed size and specific byte sequence, marking its boundary.
+This means that the receiving side, while reading the message from the socket, cannot determine
+where the message ends by analyzing the message itself with either its size or its content.
+
+One approach to solve this problem is to structure each message in such a way that it consists of a
+logical header section and a logical body section. The header section has a fixed size and structure
+and specifies the size of the body section. This allows the receiving side to first read and parse
+the header, find out the size of the message body, and then properly read the rest of the message.
+
+This approach is quite simple and is widely used. However, it brings some redundancy and additional
+computation overhead, which may be unacceptable in some circumstances.
+
+Another approach can be applied when an application uses a separate socket for each message sent to
+its peer, which is a quite popular practice. The idea of this approach is to shut down the send part
+of the socket by the message sender after the message is written to the socket. This results in a
+special service message being sent to the receiver, informing the receiver that the message is over
+and the sender will not send anything else using the current connection.
+
+The second approach provides many more benefits than the first one and, because it is part of the
+~TCP~ protocol software, it is readily available to the developer for usage.
+
+Another operation on a socket, that is, closing may seem similar to shutting down, but it is
+actually very different from it. Closing a socket assumes returning the socket and all the other
+resources associated with it back to the operating system. Just like memory, a process or a thread,
+a file handle or a mutex, a socket is a resource of an operating system. And like any other
+resource, a socket should be returned back to the operating system after it has been allocated,
+used, and is not needed by the application anymore. Otherwise, a resource leak may occur, which may
+eventually lead to the exhaustion of the resource and to the application's fault or instability of
+the whole operating system. Serious issues that may occur when sockets are not closed make closing a
+very important operation.
+
+The main difference between shutting down and closing a ~TCP~ socket is that closing interrupts the
+connection if one is established and, eventually, deallocates the socket and returns it back to the
+operating system, while shutting down only disables writing, reading, or both the operations on the
+socket and sends a service message to the peer application notifying about this fact. Shutting down
+a socket never results in deallocating the socket.
+
+**** Closing a socket
+In order to close an allocated socket, the ~close()~ method should be called on the corresponding
+object of the ~asio::ip::tcp::socket~ class. However, usually, there is no need to do it explicitly
+because the destructor of the socket object closes the socket if one was not closed explicitly.
+
+** Chapter 03 - Implementing Client Applications
+*** Introduction
+A client is a part of a distributed application that communicates with another part of this
+application called a server, in order to consume services it provides. The server, on the other
+hand, is a part of distributed application that passively waits for requests arriving from clients.
+When a request arrives, the server performs the requested operation and sends a response—the result
+of the operation—back to the client.
+
+The key characteristic of a client is that it needs a service provided by the server and it
+initiates the communication session with that server in order to consume the service. The key
+characteristic of the server is that it serves the requests coming from the clients by providing a
+requested service.
+
+**** The classification of client applications
+Client applications can be classified by the transport layer protocol they use for communication
+with the server. If the client uses a ~UDP~ protocol, it is called a ~UDP client~. If it uses a ~TCP
+protocol~, it is called a ~TCP client~ correspondingly. Of course, there are many other transport
+layer protocols that client applications may use for communication. Moreover, there are
+multiprotocol clients that can communicate over several protocols.
+
+Another way to classify client applications is according to whether the client is synchronous or
+asynchronous. A synchronous client application uses synchronous socket API calls that block the
+thread of execution until the requested operation is completed, or an error occurs. Thus, a typical
+synchronous ~TCP client~ would use the ~asio::ip::tcp::socket::write_some()~ method or ~the
+asio::write()~ free function to send a request to the sever and then use the
+~asio::ip::tcp::socket::read_some()~ method or the ~asio::read()~ free function to receive a
+response. These methods and functions are blocking, which makes the client synchronous.
+
+An asynchronous client application as opposed to a synchronous one uses asynchronous socket API
+calls. For example, an asynchronous ~TCP client~ may use the
+~asio::ip::tcp::socket::async_write_some()~ method or the ~asio::async_write()~ free function to
+send a request to the server and then use the ~asio::ip::tcp::socket::async_read_some()~ method or
+the ~asio::async_read()~ free function to asynchronously receive a response.
+
+**** Synchronous versus asynchronous
+The main advantage of a synchronous approach is its simplicity. A synchronous client is
+significantly easier to develop, debug, and support than a functionally equal asynchronous one.
+Asynchronous clients are more complex due to the fact that asynchronous operations that are used by
+them complete in other places in code (mainly in callbacks) than they are initiated. Usually, this
+requires allocating additional data structures in the free memory to keep the context of the request
+and callback functions, and also involves thread synchronization and other extras that may make the
+application structure quite complex and error-prone. Most of these extras are not required in
+synchronous clients. Besides, the asynchronous approach brings in additional computational and
+memory overhead, which makes it less efficient than a synchronous one in some conditions.
+
+However, the synchronous approach has some functional limitations, which often make this approach
+unacceptable. These limitations consist of the inability to cancel a synchronous operation after it
+has started, or to assign it a timeout so that it gets interrupted if it is running longer than a
+certain amount of time. As opposed to synchronous operations, asynchronous ones can be canceled at
+any moment after operation initiation and before the moment it completes.
+
+Besides the difference in the complexity and functionality described above, the two approaches
+differ in efficiency when it comes to running several requests in parallel.
+
+*** Implementing a synchronous TCP client
+A synchronous ~TCP~ client is a part of a distributed application that complies with the following
+statements:
+- Acts as a client in the client-server communication model
+- Communicates with the server application using a ~TCP~ protocol
+- Uses I/O and control operations (at least those I/O operations that are related to communication
+  with a server) that block the thread of execution until the corresponding operation completes, or
+  an error occurs
+
+A typical synchronous ~TCP~ client works according to the following algorithm:
+1. Obtain the IP-address and the protocol port number of the server application.
+2. Allocate an active socket.
+3. Establish a connection with the server application.
+4. Exchange messages with the server.
+5. Shut down the connection.
+6. Deallocate the socket.
+
+*** Implementing a synchronous UDP client
+A synchronous ~UDP client~ is a part of a distributed application that complies with the following
+statements:
+- Acts as a client in the client-server communication model
+- Communicates with the server application using ~UDP~ protocol
+- Uses I/O and control operations (at least those I/O operations that are related to communication
+  with the server) that block the thread of execution until the corresponding operation completes,
+  or an error occurs
+
+A typical synchronous ~UDP client~ works according to the following algorithm:
+1. Obtain an IP-address and a protocol port number of each server the client application is intended
+   to communicate with.
+2. Allocate a ~UDP~ socket.
+3. Exchange messages with the servers.
+4. Deallocate the socket.
+
+*** Implementing an asynchronous TCP client
+In this recipe, we'll consider an asynchronous ~TCP client~ application supporting the asynchronous
+execution of the requests and request canceling functionality. Here is the list of requirements the
+application will fulfill:
+- Input from the user should be processed in a separate thread - the user interface thread. This
+  thread should never be blocked for a noticeable amount of time.
+- The user should be able to issue multiple requests to different servers.
+- The user should be able to issue a new request before the previously issued requests complete.
+- The user should be able to cancel the previously issued requests before they complete.
+
+** Chapter 04 - Implementing Server Applications
+*** Introduction
+A server is a part of a distributed application that provides a service or services that are
+consumed by other parts of this application - clients. Clients communicate with the server in order
+to consume services provided by it.
+
+Usually, a server application plays a passive role in the client-server communication process.
+During start-up, a server application attaches to a particular well-known port (meaning, it is known
+to the potential clients or at least it can be obtained by the clients at runtime from some
+well-known registry) on the host machine. After this, it passively waits for incoming requests
+arriving to that port from the clients. When the request arrives, the server processes it (serves)
+by performing actions according to the specification of the service it provides.
+
+Depending on the services that particular server provides, the request processing may mean a
+different thing. An HTTP server, for example, would usually read the content of a file specified in
+the request message and send it back to the client. A proxy server would simply redirect a client's
+request to a different server for the actual processing (or maybe for another round of redirection).
+Other more specific servers may provide services that perform complex computations on the data
+provided by the client in the request and return results of such computations back to the client.
+
+Not all servers play a passive role. Some server applications may send messages to the clients
+without waiting for the clients to first send a request. Usually, such servers act as notifiers, and
+they notify clients of some interesting events. In this case, clients may not need to send any data
+to the server at all. Instead, they passively wait for notifications from the server and having
+received one, they react accordingly. Such a communication model is called push-style communication.
+This model is gaining popularity in modern web applications, providing additional flexibility.
+
+One more characteristic of a server is a manner in which it serves clients. An iterative server
+serves clients in one-by-one fashion, meaning that it does not start serving the next client before
+it completes serving the one it is currently serving. A parallel server can serve multiple clients
+in parallel. On a single-processor computer, a parallel server interleaves different stages of
+communication with several clients running them on a single processor. For example, having connected
+to one client and while waiting for the request message from it, the server can switch to connecting
+the second client, or read the request from the third one; after this, it can switch back to the
+first client to continue serving it. Such parallelism is called pseudo parallelism, as a processor
+is merely switching between several clients, but does not serve them truly simultaneously, which is
+impossible with a single processor.
+
+On multiprocessor computers, the true parallelism is possible, when a server serves more than one
+client at the same time using different hardware threads for each client.
+
+Another way to classify server applications, from an implementation's point of view, is according to
+whether the server is synchronous or asynchronous. A synchronous server uses synchronous socket API
+calls that block the thread of execution until the requested operation is completed, or else an
+error occurs. Thus, a typical synchronous ~TCP~ server would use methods such as
+~asio::ip::tcp::acceptor::accept()~ to accept the client connection request,
+~asio::ip::tcp::socket::read_some()~ to receive the request message from the client, and then
+~asio::ip::tcp::socket::write_some()~ to send the response message back to the client. All three
+methods are blocking. They block the thread of execution until the requested operation is completed,
+or an error occurs, which makes the server using these operations synchronous.
+
+An asynchronous server application, as opposed to the synchronous one, uses asynchronous socket API
+calls. For example, an asynchronous ~TCP~ server may use the
+~asio::ip::tcp::acceptor::async_accept()~ method to asynchronously accept the client connection
+request, the ~asio::ip::tcp::socket::async_read_some()~ method or the ~asio::async_read()~ free
+function to asynchronously receive the request message from the client, and then the
+~asio::ip::tcp::socket::async_write_some()~ method or the ~asio::async_write()~ free function to
+asynchronously send a response message back to the client.
+
+The main advantage of a synchronous approach as compared to an asynchronous one is its simplicity. A
+synchronous server is significantly easier to implement, debug, and support than a functionally
+equal asynchronous one. Asynchronous servers are more complex due to the fact that asynchronous
+operations used by them complete in other places in code than they are initiated. Usually, this
+requires allocating additional data structures in the free memory to keep the context of the
+request, implementing callback functions, thread synchronization, and other extras that may make the
+application structure quite complex and error-prone. Most of these extras are not required in
+synchronous servers. Besides, an asynchronous approach brings in additional computational and memory
+overheads, which may make it less efficient than a synchronous one in some situations.
+
+However, a synchronous approach has some functional limitations, which often makes it unacceptable.
+These limitations consist of the inability to cancel a synchronous operation after it has started,
+or to assign it a timeout so that it gets interrupted if it is running for too long. As opposed to
+synchronous operations, asynchronous ones can be canceled at any moment after the operation has been
+initiated.
+
+The fact that synchronous operations cannot be canceled significantly limits the area of the
+application of synchronous servers. Publicly available servers that use synchronous operations are
+vulnerable to the attacks of a culprit. If such a server is single-threaded, a single malicious
+client is enough to block the server, not allowing other clients to communicate with it. Malicious
+client used by a culprit connects to the server and does not send any data to it, while the latter
+is blocked in one of the synchronous reading functions or methods, which does not allow it to serve
+other clients.
+
+*** Implementing a synchronous iterative TCP server
+A synchronous iterative TCP server is a part of a distributed application that satisfies the
+following criteria:
+- Acts as a server in the client-server communication model
+- Communicates with client applications over ~TCP~ protocol
+- Uses I/O and control operations that block the thread of execution until the corresponding
+  operation completes, or an error occurs
+- Handles clients in a serial, one-by-one fashion
+
+A typical synchronous iterative ~TCP~ server works according to the following algorithm:
+1. Allocate an acceptor socket and bind it to a particular ~TCP~ port.
+2. Run a loop until the server is stopped:
+   1. Wait for the connection request from a client.
+   2. Accept the client's connection request when one arrives.
+   3. Wait for the request message from the client.
+   4. Read the request message.
+   5. Process the request.
+   6. Send the response message to the client.
+   7. Close the connection with the client and deallocate the socket.
+
+*** Implementing a synchronous parallel TCP server
+A synchronous parallel ~TCP~ server is a part of a distributed application that satisfies the
+following criteria:
+- Acts as a server in the client-server communication model
+- Communicates with client applications over ~TCP~ protocol
+- Uses I/O and control operations that block the thread of execution until the corresponding
+  operation completes, or an error occurs
+- May handle more than one client simultaneously
+
+A typical synchronous parallel ~TCP~ server works according to the following algorithm:
+1. Allocate an acceptor socket and bind it to a particular ~TCP~ port.
+2. Run a loop until the server is stopped:
+   - Wait for the incoming connection request from a client
+   - Accept the client's connection request
+   - Spawn a thread of control and in the context of this thread:
+     * Wait for the request message from the client
+     * Read the request message
+     * Process the request
+     * Send a response message to the client
+     * Close the connection with the client and deallocate the socket
+
+*** Implementing an asynchronous TCP server
+An asynchronous ~TCP~ server is a part of a distributed application that satisfies the following
+criteria:
+- Acts as a server in the client-server communication model
+- Communicates with client applications over ~TCP~ protocol
+- Uses the asynchronous I/O and control operations
+- May handle multiple clients simultaneously
+
+A typical asynchronous ~TCP~ server works according to the following algorithm:
+1. Allocate an acceptor socket and bind it to a particular ~TCP~ port.
+2. Initiate the asynchronous accept operation.
+3. Spawn one or more threads of control and add them to the pool of threads that run the Boost.Asio
+   event loop.
+4. When the asynchronous accept operation completes, initiate a new one to accept the next
+   connection request.
+5. Initiate the asynchronous reading operation to read the request from the connected client.
+6. When the asynchronous reading operation completes, process the request and prepare the response
+   message.
+7. Initiate the asynchronous writing operation to send the response message to the client.
+8. When the asynchronous writing operation completes, close the connection and deallocate the
+   socket.
+
+Note that the steps starting from the fourth step in the preceding algorithm may be performed in
+arbitrary order depending on the relative timing of the concrete asynchronous operations in a
+concrete application. Due to the asynchronous model of the server, sequential order of execution of
+the steps may not hold even when the server is running on a single- processor computer.
+
+** Chapter 05 - HTTP and SSL/TLS
+** Chapter 06 - Other Topics

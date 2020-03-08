@@ -18,7 +18,9 @@ int main() {
     asio::io_context io;
 
     int count = 0;
+
     asio::steady_timer t(io, asio::chrono::seconds(3));
+    t.async_wait();
     t.async_wait(bind(print, asio::placeholders::error, &t, &count));
 
     cout << "test";
@@ -29,3 +31,15 @@ int main() {
 
     return 0;
 }
+
+
+
+
+
+
+
+
+
+
+
+

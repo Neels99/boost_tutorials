@@ -1,16 +1,17 @@
 #include <iostream>
 #include <boost/asio.hpp>
-
+using namespace std;
+using namespace boost;
 void print(const boost::system::error_code& /*e*/)
 {
-    std::cout << "Hello, world!" << std::endl;
+    cout << "Hello, world!" << std::endl;
 }
 
 int main()
 {
-    boost::asio::io_context io;
+    asio::io_context io;
 
-    boost::asio::steady_timer t(io, boost::asio::chrono::seconds(5));
+    asio::steady_timer t(io, asio::chrono::seconds(5));
     t.async_wait(&print);
 
     io.run();

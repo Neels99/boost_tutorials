@@ -30,10 +30,10 @@ int main(int argc, char* argv[])
 
             size_t len = socket.read_some(boost::asio::buffer(buf), error);
 
-            if (error == boost::asio::error::eof)
+            /*if (error == boost::asio::error::eof)
                 break; // Connection closed cleanly by peer.
             else if (error)
-                throw boost::system::system_error(error); // Some other error.
+                throw boost::system::system_error(error); // Some other error. */
 
             std::cout.write(buf.data(), len);
         }
