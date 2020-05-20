@@ -1,0 +1,37 @@
+[
+{
+  "directory": "F:/repo/boost_learn/build",
+  "command": "C:\\PROGRA~1\\MINGW-~1\\X86_64~1.0-P\\mingw64\\bin\\X86_64~2.EXE   @CMakeFiles/test_libs.dir/includes_CXX.rsp -g   -std=gnu++2a -o CMakeFiles\\test_libs.dir\\other\\config3.cpp.obj -c F:\\repo\\boost_learn\\other\\config3.cpp",
+  "file": "F:/repo/boost_learn/other/config3.cpp"
+},
+{
+  "directory": "F:/repo/boost_learn/build",
+  "command": "C:\\PROGRA~1\\MINGW-~1\\X86_64~1.0-P\\mingw64\\bin\\X86_64~2.EXE   @CMakeFiles/test_libs.dir/includes_CXX.rsp -g   -std=gnu++2a -o CMakeFiles\\test_libs.dir\\other\\A.cpp.obj -c F:\\repo\\boost_learn\\other\\A.cpp",
+  "file": "F:/repo/boost_learn/other/A.cpp"
+},
+{
+  "directory": "F:/repo/boost_learn/build",
+  "command": "C:\\PROGRA~1\\MINGW-~1\\X86_64~1.0-P\\mingw64\\bin\\X86_64~2.EXE   @CMakeFiles/test_libs.dir/includes_CXX.rsp -g   -std=gnu++2a -o CMakeFiles\\test_libs.dir\\other\\B.cpp.obj -c F:\\repo\\boost_learn\\other\\B.cpp",
+  "file": "F:/repo/boost_learn/other/B.cpp"
+},
+{
+  "directory": "F:/repo/boost_learn/build",
+  "command": "C:\\PROGRA~1\\MINGW-~1\\X86_64~1.0-P\\mingw64\\bin\\X86_64~2.EXE   @CMakeFiles/test_libs.dir/includes_CXX.rsp -g   -std=gnu++2a -o CMakeFiles\\test_libs.dir\\ThradeAsio\\withouth.cpp.obj -c F:\\repo\\boost_learn\\ThradeAsio\\withouth.cpp",
+  "file": "F:/repo/boost_learn/ThradeAsio/withouth.cpp"
+},
+{
+  "directory": "F:/repo/boost_learn/build",
+  "command": "C:\\PROGRA~1\\MINGW-~1\\X86_64~1.0-P\\mingw64\\bin\\X86_64~2.EXE   @CMakeFiles/tests.dir/includes_CXX.rsp -g   -std=gnu++2a -o CMakeFiles\\tests.dir\\other\\ForTest4.cpp.obj -c F:\\repo\\boost_learn\\other\\ForTest4.cpp",
+  "file": "F:/repo/boost_learn/other/ForTest4.cpp"
+},
+{
+  "directory": "F:/repo/boost_learn/build/testout1",
+  "command": "C:\\PROGRA~1\\MINGW-~1\\X86_64~1.0-P\\mingw64\\bin\\X86_64~2.EXE   @CMakeFiles/testout1.dir/includes_CXX.rsp -g   -std=gnu++2a -o CMakeFiles\\testout1.dir\\testoutside.cpp.obj -c F:\\repo\\boost_learn\\testout1\\testoutside.cpp",
+  "file": "F:/repo/boost_learn/testout1/testoutside.cpp"
+},
+{
+  "directory": "F:/repo/boost_learn/build/testout2",
+  "command": "C:\\PROGRA~1\\MINGW-~1\\X86_64~1.0-P\\mingw64\\bin\\X86_64~2.EXE   @CMakeFiles/testout2.dir/includes_CXX.rsp -g   -std=gnu++2a -o CMakeFiles\\testout2.dir\\testoutside2.cpp.obj -c F:\\repo\\boost_learn\\testout2\\testoutside2.cpp",
+  "file": "F:/repo/boost_learn/testout2/testoutside2.cpp"
+}
+]

@@ -9,8 +9,10 @@ void print(const system::error_code& /*e*/, asio::steady_timer* t, int* count) {
         cout << *count << endl;
         ++(*count);
 
-        t->expires_at(t->expiry() + asio::chrono::seconds(1));
+        t->expires_at(t->expiry()+asio::chrono::seconds(1));
+        t->cancel();
         t->async_wait(bind(print, asio::placeholders::error, t, count));
+
     }
 }
 

@@ -1,0 +1,40 @@
+#IncludeRegexLine: ^[ 	]*[#%][ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+F:/repo/boost_learn/ThradeAsio/withouth.cpp
+iostream
+-
+
+F:/repo/boost_learn/other/A.cpp
+A.h
+F:/repo/boost_learn/other/A.h
+B.h
+F:/repo/boost_learn/other/B.h
+
+F:/repo/boost_learn/other/A.h
+string
+-
+B.h
+F:/repo/boost_learn/other/B.h
+
+F:/repo/boost_learn/other/B.cpp
+A.h
+F:/repo/boost_learn/other/A.h
+B.h
+F:/repo/boost_learn/other/B.h
+
+F:/repo/boost_learn/other/B.h
+string
+-
+
+F:/repo/boost_learn/other/config3.cpp
+config3.h
+F:/repo/boost_learn/other/config3.h
+
+F:/repo/boost_learn/other/config3.h
+

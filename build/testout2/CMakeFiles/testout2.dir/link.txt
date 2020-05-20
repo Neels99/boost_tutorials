@@ -1,0 +1,2 @@
+C:\PROGRA~1\MINGW-~1\X86_64~1.0-P\mingw64\bin\ar.exe qc libtestout2.a  CMakeFiles/testout2.dir/testoutside2.cpp.obj
+C:\PROGRA~1\MINGW-~1\X86_64~1.0-P\mingw64\bin\ranlib.exe libtestout2.a

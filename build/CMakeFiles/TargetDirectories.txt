@@ -1,0 +1,10 @@
+F:/repo/boost_learn/build/CMakeFiles/test_libs.dir
+F:/repo/boost_learn/build/CMakeFiles/tests.dir
+F:/repo/boost_learn/build/CMakeFiles/edit_cache.dir
+F:/repo/boost_learn/build/CMakeFiles/rebuild_cache.dir
+F:/repo/boost_learn/build/testout1/CMakeFiles/testout1.dir
+F:/repo/boost_learn/build/testout1/CMakeFiles/edit_cache.dir
+F:/repo/boost_learn/build/testout1/CMakeFiles/rebuild_cache.dir
+F:/repo/boost_learn/build/testout2/CMakeFiles/testout2.dir
+F:/repo/boost_learn/build/testout2/CMakeFiles/edit_cache.dir
+F:/repo/boost_learn/build/testout2/CMakeFiles/rebuild_cache.dir

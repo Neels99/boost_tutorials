@@ -1,0 +1,22 @@
+#IncludeRegexLine: ^[ 	]*[#%][ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+../testout1/testoutside.h
+
+F:/repo/boost_learn/testout2/testoutside2.cpp
+testoutside.h
+F:/repo/boost_learn/testout2/testoutside.h
+testoutside2.h
+F:/repo/boost_learn/testout2/testoutside2.h
+iostream
+-
+
+F:/repo/boost_learn/testout2/testoutside2.h
+iostream
+-
+

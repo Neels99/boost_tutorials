@@ -1,0 +1,2 @@
+C:\PROGRA~1\MINGW-~1\X86_64~1.0-P\mingw64\bin\ar.exe qc libtest_libs.a  CMakeFiles/test_libs.dir/other/config3.cpp.obj CMakeFiles/test_libs.dir/other/A.cpp.obj CMakeFiles/test_libs.dir/other/B.cpp.obj CMakeFiles/test_libs.dir/ThradeAsio/withouth.cpp.obj
+C:\PROGRA~1\MINGW-~1\X86_64~1.0-P\mingw64\bin\ranlib.exe libtest_libs.a
